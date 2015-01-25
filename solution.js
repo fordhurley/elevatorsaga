@@ -15,17 +15,28 @@
             }
         }
 
-        function updateElevatorQueues() {
+        var elevatorChoice = 0;
+
+        function updateElevatorQueues(elevator) {
             console.log(requests);
             if (requests.length) {
                 var floorNum = requests[0];
-                elevators[0].goToFloor(floorNum);
+                if (elevator !== undefined) {
+                    elevator = elevator;
+                } else {
+                    elevator = elevators[elevatorChoice];
+                    elevatorChoice += 1;
+                    if (elevatorChoice >= elevators.length) {
+                        elevatorChoice = 0;
+                    }
+                }
+                elevator.goToFloor(floorNum);
             }
         }
 
         elevators.forEach(function(elevator) {
             elevator.on("idle", function() {
-                updateElevatorQueues();
+                updateElevatorQueues(elevator);
             });
             elevator.on("passing_floor", function(floorNum, direction) {
                 if (requests.indexOf(floorNum) != -1) {
