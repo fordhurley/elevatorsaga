@@ -1,65 +1,77 @@
 {
     init: function(elevators, floors) {
-        var requests = [];
+        var pickupRequests = floors.map(function () { return false });
 
-        function requestOnce(floorNum) {
-            if (requests.indexOf(floorNum) == -1) {
-                requests.push(floorNum);
-            }
+        function requestPickup(floorNum) {
+            pickupRequests[floorNum] = true;
+            updatePickupRequests();
         }
 
-        function clearRequest(floorNum) {
-            var index = requests.indexOf(floorNum);
-            if (index >= 0) {
-                requests.splice(index, 1);
-            }
+        function clearPickupRequest(floorNum) {
+            pickupRequests[floorNum] = false;
         }
 
-        var elevatorChoice = 0;
-
-        function updateElevatorQueues(elevator) {
-            console.log(requests);
-            if (requests.length) {
-                var floorNum = requests[0];
-                if (elevator !== undefined) {
-                    elevator = elevator;
-                } else {
-                    elevator = elevators[elevatorChoice];
-                    elevatorChoice += 1;
-                    if (elevatorChoice >= elevators.length) {
-                        elevatorChoice = 0;
-                    }
+        function updatePickupRequests(elevator) {
+            console.log("pickupRequests:", pickupRequests);
+            var floorNum = pickupRequests.indexOf(true);
+            if (floorNum != -1) {
+                if (typeof elevator === 'undefined') {
+                    if (anyElevatorGoingTo(floorNum)) { return }
+                    elevator = closestAvailableElevator(floorNum);
                 }
-                elevator.goToFloor(floorNum);
+                if (elevator.destinationQueue.indexOf(floorNum) == -1) {
+                    elevator.goToFloor(floorNum);
+                }
             }
+        }
+
+        function closestAvailableElevator(floorNum) {
+            var availableElevators = elevators.filter(function(elevator) {
+                return elevator.loadFactor() < 0.8;
+            });
+            if (availableElevators.length == 0) {
+                // None are actually available, so consider all available (one will be eventually!):
+                availableElevators = elevators;
+            }
+            availableElevators.sort(function(a, b) {
+                return Math.abs(a.currentFloor() - floorNum) - Math.abs(b.currentFloor() - floorNum);
+            });
+            return availableElevators[0];
+        }
+
+        function anyElevatorGoingTo(floorNum) {
+            return elevators.filter(function(elevator) {
+                return elevator.destinationQueue.indexOf(floorNum) != -1;
+            }).length > 0
         }
 
         elevators.forEach(function(elevator) {
             elevator.on("idle", function() {
-                updateElevatorQueues(elevator);
+                updatePickupRequests(elevator);
             });
             elevator.on("passing_floor", function(floorNum, direction) {
-                if (requests.indexOf(floorNum) != -1) {
+                if (pickupRequests[floorNum] && elevator.loadFactor() < 0.8) {
                     elevator.goToFloor(floorNum, true); // go immediately
                 }
             });
             elevator.on("stopped_at_floor", function(floorNum) {
-                clearRequest(floorNum);
+                if (elevator.loadFactor() < 0.8) {
+                    clearPickupRequest(floorNum);
+                }
             });
             elevator.on("floor_button_pressed", function(floorNum) {
-                requestOnce(floorNum);
-                updateElevatorQueues();
+                if (elevator.destinationQueue.indexOf(floorNum) == -1) {
+                    elevator.goToFloor(floorNum);
+                }
             });
         });
 
         floors.forEach(function(floor) {
             floor.on("up_button_pressed", function() {
-                requestOnce(floor.floorNum());
-                updateElevatorQueues();
+                requestPickup(floor.floorNum());
             });
             floor.on("down_button_pressed", function() {
-                requestOnce(floor.floorNum());
-                updateElevatorQueues();
+                requestPickup(floor.floorNum());
             });
         });
     },
