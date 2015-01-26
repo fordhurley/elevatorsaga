@@ -2,17 +2,33 @@
     init: function(elevators, floors) {
         var pickupRequests = floors.map(function () { return false });
 
+        function byDistanceToFloor(floorNum) {
+            return function(a, b) {
+                return Math.abs(a - floorNum) - Math.abs(b - floorNum);
+            }
+        }
+
         function sortQueue(elevator) {
-            elevator.destinationQueue.sort(function(a, b) {
-                return Math.abs(a - elevator.currentFloor()) - Math.abs(b - elevator.currentFloor());
-            });
+            elevator.destinationQueue.sort(byDistanceToFloor(elevator.currentFloor()));
             elevator.checkDestinationQueue();
         }
 
+        function makeClosestPickupHandler(elevator) {
+            return function() {
+                var requestedFloors = [];
+                pickupRequests.forEach(function(requested, floorNum) {
+                    if (requested) { requestedFloors.push(floorNum); }
+                });
+                if (requestedFloors.length == 0) { return }
+                requestedFloors.sort(byDistanceToFloor(elevator.currentFloor()));
+                var floor = requestedFloors[0];
+                elevator.goToFloor(floor);
+                pickupRequests[floor] = false;
+            }
+        }
+
         elevators.forEach(function(elevator) {
-            elevator.on("idle", function() {
-                elevator.goToFloor(pickupRequests.indexOf(true));
-            });
+            elevator.on("idle", makeClosestPickupHandler(elevator));
             elevator.on("passing_floor", function(floorNum, direction) {
                 if ((pickupRequests[floorNum] && elevator.loadFactor() < 0.8) || elevator.destinationQueue.indexOf(floorNum) != -1) {
                     elevator.goToFloor(floorNum, true); // go immediately
@@ -27,13 +43,21 @@
             });
         });
 
+        function makePickupRequestHandler(floorNum) {
+            return function() {
+                pickupRequests[floorNum] = true;
+                idleElevators = elevators.filter(function(elevator) {
+                    return elevator.destinationQueue.length == 0 && elevator.loadFactor() == 0;
+                });
+                if (idleElevators.length) {
+                    makeClosestPickupHandler(idleElevators[0])();
+                }
+            }
+        }
+
         floors.forEach(function(floor) {
-            floor.on("up_button_pressed", function() {
-                pickupRequests[floor.floorNum()] = true;
-            });
-            floor.on("down_button_pressed", function() {
-                pickupRequests[floor.floorNum()] = true;
-            });
+            floor.on("up_button_pressed", makePickupRequestHandler(floor.floorNum()));
+            floor.on("down_button_pressed", makePickupRequestHandler(floor.floorNum()));
         });
     },
 
