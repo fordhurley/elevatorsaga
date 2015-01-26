@@ -49,11 +49,12 @@
         function makePickupRequestHandler(floorNum) {
             return function() {
                 pickupRequests[floorNum] = true;
-                idleElevators = elevators.filter(function(elevator) {
+                var idleElevators = elevators.filter(function(elevator) {
                     return elevator.destinationQueue.length == 0 && elevator.loadFactor() == 0;
                 });
                 if (idleElevators.length) {
-                    makeClosestPickupHandler(idleElevators[0])();
+                    var randomElevator = idleElevators[Math.floor(Math.random() * idleElevators.length)]
+                    makeClosestPickupHandler(randomElevator)();
                 }
             }
         }
