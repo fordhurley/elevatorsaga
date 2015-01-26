@@ -1,5 +1,8 @@
 {
     init: function(elevators, floors) {
+        var MAX_ELEVATORS = 1; // For minimizing moves, less elevators is better
+        elevators = elevators.slice(0, MAX_ELEVATORS);
+
         var pickupRequests = floors.map(function () { return false });
 
         function byDistanceToFloor(floorNum) {
